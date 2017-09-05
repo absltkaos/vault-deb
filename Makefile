@@ -17,25 +17,38 @@
 # Please see README.md for a more detailed description.
 
 BASE_DIR  = $(CURDIR)/pkg
-SRC_DIR   = $(BASE_DIR)/checkout/src/github.com/hashicorp/vault
 DISTRO   ?= $(shell lsb_release -sc)
-REVISION ?= 1~$(DISTRO)1~ppa3
+REVISION ?= 1~$(DISTRO)1~ev
 MODIFIER ?= 
 CHANGE   ?= "New upstream release."
+DEBUILD_OPTS ?= "-S -sa -us -uc"
 PBUILDER ?= cowbuilder
-PBUILDER_BASE ?= $$HOME/pbuilder/$(DISTRO)-base-with-golang-1.4.cow
+PBUILDER_BASE ?= $$HOME/pbuilder/$(DISTRO)-base.cow
 PPA      ?= 
 
 build: build_src
+	if [ ! -d "$(PBUILDER_BASE)" ] ; then \
+		echo "Creating cowbuilder environment"; \
+		mkdir -p $(shell dirname "$(PBUILDER_BASE)"); \
+		sudo cowbuilder \
+			--create \
+			--basepath $(PBUILDER_BASE) \
+			--distribution $(DISTRO) \
+			--debootstrapopts \
+			--arch \
+			--debootstrapopts amd64 \
+			--extrapackages "debhelper ca-certificates" \
+			--components "main universe multiverse restricted"; \
+	fi
 	mkdir -p $(BASE_DIR)/buildresult
 	cd $(BASE_DIR) && sudo $(PBUILDER) --build vault_$(VERSION)-$(REVISION).dsc \
 	--basepath=$(PBUILDER_BASE) \
 	--buildresult buildresult
 
 build_src: prepare_src 
-	cd $(PKG_DIR) && debuild -S -sa
+	cd $(PKG_DIR) && debuild $(DEBUILD_OPTS)
 
-prepare_src: $(SRC_DIR) get_current_version create_upstream_tarball
+prepare_src: download get_current_version create_upstream_tarball
 	rsync -qav --delete debian/ $(PKG_DIR)/debian
 	$(eval CREATE = $(shell test -f debian/changelog || echo "--create "))
 	test $(CURRENT_VERSION)_ != $(VERSION)-$(REVISION)_ && \
@@ -49,13 +62,23 @@ prepare_src: $(SRC_DIR) get_current_version create_upstream_tarball
 create_upstream_tarball: get_new_version
 	if [ ! -f pkg/vault_$(VERSION).orig.tar.gz ]; then \
 	  rm -rf $(PKG_DIR); \
-	  rsync -qav --delete $(BASE_DIR)/checkout/ $(PKG_DIR); \
-	  export GOPATH=$(PKG_DIR) && make -C $(PKG_DIR)/src/github.com/hashicorp/vault bootstrap; \
+	  rsync -qav --delete $(BASE_DIR)/ $(PKG_DIR); \
 	  tar czf pkg/vault_$(VERSION).orig.tar.gz -C $(BASE_DIR) vault-$(VERSION); \
 	fi
 
-$(SRC_DIR):
-	git clone https://github.com/hashicorp/vault.git $(SRC_DIR)
+download:
+	if [ ! -f "$(BASE_DIR)/src/vault_$(VERSION)_linux_amd64.zip" ] ; then \
+	  mkdir -p "$(BASE_DIR)/src"; \
+	  cd "$(BASE_DIR)/src"; \
+	  curl https://releases.hashicorp.com/vault/$(VERSION)/vault_$(VERSION)_linux_amd64.zip > vault_$(VERSION)_linux_amd64.zip; \
+	  mkdir -p "$(BASE_DIR)/src/docs"; \
+	  cd "$(BASE_DIR)/src/docs"; \
+	  for rdoc in CHANGELOG.md README.md LICENSE; do \
+	    curl https://raw.githubusercontent.com/hashicorp/vault/master/$$rdoc > $$rdoc; \
+	  done; \
+	  cd $(BASE_DIR); \
+	  unzip src/vault_$(VERSION)_linux_amd64.zip; \
+	fi
 
 get_current_version:
 	$(eval CURRENT_VERSION = $(shell test -f debian/changelog && \
@@ -63,14 +86,11 @@ get_current_version:
 	@echo "--> Current package version: $(CURRENT_VERSION)"
 	
 get_new_version:
-	cd $(SRC_DIR) && git fetch origin --tags
-	$(eval LATEST_TAG = $(shell if [ -z "$(VERSION)" ]; then \
-			cd $(SRC_DIR) && git tag | tail -n1; \
-		else \
-			echo "v$(VERSION)"; \
-		fi))
-	cd $(SRC_DIR) && git checkout tags/$(LATEST_TAG)
-	$(eval VERSION = $(subst v,,$(LATEST_TAG))$(MODIFIER))
+
+	$(shell if [ -z "$(VERSION)" ]; then \
+		echo You must supply a version; \
+		exit 1; \
+	fi)
 	$(eval PKG_DIR = $(BASE_DIR)/vault-$(VERSION))
 	@echo "--> New package version: $(VERSION)-$(REVISION)"
 
