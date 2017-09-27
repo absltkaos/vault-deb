@@ -19,6 +19,9 @@ override_dh_auto_install:
 	cp -a vault usr/bin
 	cp -a debian/vault.conf etc
 
+override_dh_installinit:
+	dh_installinit --no-start
+
 %:
 	dh $@ 
 
