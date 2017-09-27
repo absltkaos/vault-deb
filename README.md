@@ -27,10 +27,9 @@ repository and update the local sources:
 
 The simplest usage of the Makefile is, of course,
 
-    $ make
+    $ make VERSION=0.8.1
 
-It has the (perhaps obvious) effect of cloning the vault git repo locally, checking
-out the latest version tag, and building a binary .deb package out of it.
+VERSION must be specified to know what to download from HashiCorp
 
 The available targets are:
 
@@ -64,6 +63,7 @@ Here is the complete list:
               to `1~$(DISTRO)1~ppa1`.
 * `CHANGE`: The message to use in the debian/changelog file for this package.
             Defaults to "New upstream release".
+* `DEBUILD_OTPS`: Options to pass to debuild. Defaults to `-S -sa -us -uc`
 * `PBUILDER`: Allows to select an executable different from cowbuilder to
               produce the binary package.
 * `PBUILDER_BASE`: Allows to specify a custom path for the cowbuilder/pbuilder base
@@ -93,5 +93,5 @@ utopic:
 The build machine must meet a set of requirements to be able to
 run the Makefile. In particular it needs:
 
-* a suitable environment for building debian packages (pbuilder/cowbuilder) with Go 1.4+
+* a suitable environment for building debian packages (pbuilder/cowbuilder). As well curl.
 
