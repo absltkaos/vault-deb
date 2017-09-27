@@ -21,12 +21,12 @@ DISTRO   ?= $(shell lsb_release -sc)
 REVISION ?= 1~$(DISTRO)1~ev
 MODIFIER ?= 
 CHANGE   ?= "New upstream release."
-DEBUILD_OPTS ?= "-S -sa -us -uc"
+DEBUILD_OPTS ?= -S -sa -us -uc
 PBUILDER ?= cowbuilder
 PBUILDER_BASE ?= $$HOME/pbuilder/$(DISTRO)-base.cow
 PPA      ?= 
 
-build: build_src
+build: get_current_version build_src
 	if [ ! -d "$(PBUILDER_BASE)" ] ; then \
 		echo "Creating cowbuilder environment"; \
 		mkdir -p $(shell dirname "$(PBUILDER_BASE)"); \
@@ -48,7 +48,7 @@ build: build_src
 build_src: prepare_src 
 	cd $(PKG_DIR) && debuild $(DEBUILD_OPTS)
 
-prepare_src: download get_current_version create_upstream_tarball
+prepare_src: download create_upstream_tarball
 	rsync -qav --delete debian/ $(PKG_DIR)/debian
 	$(eval CREATE = $(shell test -f debian/changelog || echo "--create "))
 	test $(CURRENT_VERSION)_ != $(VERSION)-$(REVISION)_ && \
@@ -59,7 +59,7 @@ prepare_src: download get_current_version create_upstream_tarball
         --controlmaint \
         $(CHANGE) || exit 0
 
-create_upstream_tarball: get_new_version
+create_upstream_tarball:
 	if [ ! -f pkg/vault_$(VERSION).orig.tar.gz ]; then \
 	  rm -rf $(PKG_DIR); \
 	  rsync -qav --delete $(BASE_DIR)/ $(PKG_DIR); \
@@ -80,17 +80,16 @@ download:
 	  unzip src/vault_$(VERSION)_linux_amd64.zip; \
 	fi
 
-get_current_version:
+get_current_version: get_new_version
 	$(eval CURRENT_VERSION = $(shell test -f debian/changelog && \
 		dpkg-parsechangelog | grep Version | awk '{print $$2}'))
 	@echo "--> Current package version: $(CURRENT_VERSION)"
 	
 get_new_version:
-
-	$(shell if [ -z "$(VERSION)" ]; then \
-		echo You must supply a version; \
-		exit 1; \
-	fi)
+	if [ -z "$(VERSION)" ]; then \
+		echo "Looking for latest release version from releases.hashicorp.com"; \
+		$(eval VERSION = $(shell curl https://releases.hashicorp.com/vault/ | grep 'a href' | grep -o 'vault_[0-9.]\+' | sort -rV | sed 's/vault_//' | head -n 1 ))\
+	fi
 	$(eval PKG_DIR = $(BASE_DIR)/vault-$(VERSION))
 	@echo "--> New package version: $(VERSION)-$(REVISION)"
 
