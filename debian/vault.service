@@ -7,5 +7,6 @@ Wants=network.target
 Type=simple
 User=vault
 ExecStart=/usr/bin/vault server -config /etc/vault.conf
+ExecReload=/bin/kill -HUP $MAINPID
 
 [Install]
